@@ -33,10 +33,6 @@ class check_brackets {
         int falseposition = -10;
         for (int position = 0; position < text.length(); ++position) {
             char next = text.charAt(position);
-            // not necessary to have such base case
-            // if(text.length()== 1){
-            //   falseposition = 1;
-            // }
 
             if (next == '(' || next == '[' || next == '{') {
                 // Process opening bracket
@@ -51,10 +47,9 @@ class check_brackets {
                 // Process closing bracket
                 if(opening_brackets_stack.isEmpty()){
                   falseposition = position + 1;
-                  Bracket next_bracket = new Bracket(next, position);
-                  opening_brackets_stack.push(next_bracket);
                   break;
-                }else if(opening_brackets_stack.peek().Match(next)) {
+                }else
+                if(opening_brackets_stack.peek().Match(next)) {
                   opening_brackets_stack.pop();
                   if(position+1 >= text.length() && !opening_brackets_stack.isEmpty()){
                     falseposition = opening_brackets_stack.peek().position + 1;
@@ -63,12 +58,11 @@ class check_brackets {
                   falseposition = position+1;
                   break;
                 }
-
             }
         }
 
         // Printing answer
-        if (opening_brackets_stack.isEmpty()){
+        if (falseposition == -10){
           System.out.println("Success");
         }else{
           System.out.println(falseposition);
