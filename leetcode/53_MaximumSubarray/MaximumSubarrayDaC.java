@@ -21,6 +21,7 @@ class MaximumSubarrayDaC {
         int leftSum = Subarray(A,left,mid);// left part
         int rightSum = Subarray(A,mid+1,right);//right part
         int crossSum = crossSubarray(A,left,right);// cross part
+        // Print results in each iteration
         // System.out.println("left = "+ left +"; right = "+ right +"; mid = "+ mid +".");
         // System.out.println("leftSum = "+ leftSum +"; rightSum = "+ rightSum + "; CrossSum = "+ crossSum + ".");
         if(leftSum >= rightSum && leftSum >= crossSum){// left part is max
@@ -32,8 +33,8 @@ class MaximumSubarrayDaC {
         return crossSum; // cross part is max
     }
     public static int crossSubarray(int[] A,int left,int right){
-        int leftSum = Integer.MIN_VALUE;
-        int rightSum = Integer.MIN_VALUE;
+        int leftSum = -2^31;
+        int rightSum = -2^31;
         int sum = 0;
         int mid = left + (right - left) / 2;
         for(int i = mid; i >= left ; i--){
@@ -51,9 +52,12 @@ class MaximumSubarrayDaC {
         }
         return leftSum + rightSum;
     }
-
     public static void main(String[] args){
         int[] MainArray = new int[]{-2,1,-3,4,-1,2,1,-5,4};
         System.out.println(maxSubArray(MainArray));
     }
 }
+
+// Reference:
+// https://leetcode.com/problems/maximum-subarray/discuss/20225/My-Divide-and-Conquer-Solution-in-Java-under-instruction-of-CLRS(O(nlogn))
+// by wjixiaopeng
