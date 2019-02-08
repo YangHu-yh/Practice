@@ -17,3 +17,6 @@ We need to find the largest peak following the smallest valley. Therefore, we lo
 
 Time complexity : O(n). Only a single pass is needed.
 Space complexity : O(1). Only two variables are used.
+
+### Reference ###
+- https://leetcode.com/articles/best-time-to-buy-and-sell-stock/
