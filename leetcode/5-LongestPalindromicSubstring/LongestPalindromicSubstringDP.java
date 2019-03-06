@@ -14,8 +14,9 @@
 
 // Reference:
 // https://leetcode.com/problems/longest-palindromic-substring/solution/
+// https://leetcode.com/problems/longest-palindromic-substring/discuss/2987/Clean-Java-solution-using-DP-yet-the-time-complexity-is-O(N2)
 
-// Approach 4: ExpandAroundCenter
+// Approach 3: DynamicProgramming
 public class LongestPalindromicSubstringDP{
     public static String longestPalindrome(String s) {
         int len = s.length();
@@ -75,34 +76,5 @@ public class LongestPalindromicSubstringDP{
     public static void main(String arg[]){
         String test = "babad";
         System.out.println(longestPalindrome(test));
-    }
-}
-
-
-class Solution {
-    public static String longestPalindrome(String s) {
-        int len = s.length();
-        if (len == 0 || s == null) {
-            return "";
-        }
-
-        boolean[][] isPalindrome = new boolean[len][len];
-        int longestPalindromeLength = 0;
-        int longestPalindromeStart = 1;
-        // come back to see why need  +1 and -1
-        for (int j = 0; j < len; j++) {
-            for (int i = j; i >= 0; i--) {
-                if ((s.charAt(i) == s.charAt(j)) && (j - i < 2 || isPalindrome[i + 1][j - 1])) {
-                    isPalindrome[i][j] = true;
-                }
-                // System.out.println("i = " + i + "; j = " + j + "; "+isPalindrome[i][j] + " ");
-                if (isPalindrome[i][j] && j - i + 1 > longestPalindromeLength) {
-                    longestPalindromeLength = j - i + 1;
-                    longestPalindromeStart = i;
-                }
-            }
-        }
-        // System.out.println("longestPalindromeStart = "+ longestPalindromeStart + "; longestPalindromeLength = "+ longestPalindromeLength);
-        return s.substring(longestPalindromeStart, longestPalindromeStart + longestPalindromeLength);
     }
 }
