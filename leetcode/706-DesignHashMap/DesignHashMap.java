@@ -1,5 +1,13 @@
 // https://leetcode.com/problems/design-hashmap/discuss/152746/Java-Solution
 
+/**
+ * Your MyHashMap object will be instantiated and called as such:
+ * MyHashMap obj = new MyHashMap();
+ * obj.put(key,value);
+ * int param_2 = obj.get(key);
+ * obj.remove(key);
+ */
+ 
 class MyHashMap {
        final ListNode[] nodes = new ListNode[10000];
 
