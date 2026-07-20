@@ -30,6 +30,12 @@ var CONFIG = {
 
   COORDINATOR_EMAIL: 'tcacf.ut@gmail.com', // gets change alerts + unknown-name warnings
 
+  // If a date has no leader this many days ahead, alert these people.
+  VACANCY: {
+    DAYS_BEFORE: 14,
+    NOTIFY: ['phchennick@gmail.com', 'pennybigping@gmail.com', 'yang.hu496@gmail.com']
+  },
+
   DAILY_HOUR: 18, // hour (0-23) the daily email check runs — 18 = 6pm
 
   // Calendar sync: creates an all-day event per service on this account's
@@ -85,6 +91,16 @@ function dailyCheck() {
   var today = startOfDay(new Date());
   schedule.forEach(function (row) {
     var diff = Math.round((startOfDay(row.date) - today) / 86400000);
+    if (!row.leader) { // no leader assigned yet
+      if (diff === CONFIG.VACANCY.DAYS_BEFORE) {
+        var vDateStr = Utilities.formatDate(row.date, Session.getScriptTimeZone(), 'EEE, MMM d, yyyy');
+        MailApp.sendEmail(CONFIG.VACANCY.NOTIFY.join(','),
+          'No worship leader yet for ' + vDateStr + ' 🙏',
+          'Hi team,\n\nThere is no worship leader decided for ' + vDateStr +
+          ' yet (2 weeks away). Could you try contacting or asking around to find someone?\n\nThank you!\nTCACF Auto Reminder');
+      }
+      return;
+    }
     var r = CONFIG.REMINDERS[diff];
     if (!r) return;
     var email = resolveEmail(row.leader);
@@ -124,7 +140,7 @@ function syncCalendar(schedule) {
   var today = startOfDay(new Date());
 
   schedule.forEach(function (row) {
-    if (startOfDay(row.date) < today) return;
+    if (startOfDay(row.date) < today || !row.leader) return;
     var key = Utilities.formatDate(row.date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     var prev = stored[key];
     if (prev && prev.leader === row.leader) return; // already synced
@@ -161,8 +177,9 @@ function detectChanges(schedule) {
   schedule.forEach(function (row) {
     var key = Utilities.formatDate(row.date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     now[key] = row.leader;
-    if (startOfDay(row.date) >= today && old.hasOwnProperty(key) && old[key] !== row.leader) {
-      changes.push({ date: key, from: old[key], to: row.leader });
+    // filling a blank slot isn't a "change"; a swap or removal is
+    if (startOfDay(row.date) >= today && old.hasOwnProperty(key) && old[key] && old[key] !== row.leader) {
+      changes.push({ date: key, from: old[key], to: row.leader || '(no leader yet)' });
     }
   });
 
@@ -200,7 +217,7 @@ function readSchedule() {
   for (var k = headerRow + 1; k < values.length; k++) {
     var d = values[k][dateCol], leader = String(values[k][leaderCol]).trim();
     if (!(d instanceof Date)) d = new Date(d);
-    if (!leader || isNaN(d.getTime())) continue;
+    if (isNaN(d.getTime())) continue; // keep blank-leader rows for vacancy alerts
     rows.push({ date: d, leader: leader });
   }
   return rows;

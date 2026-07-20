@@ -5,7 +5,8 @@ day-of reminder, 7-days-before (confirm instrument & second vocal),
 3-days-before (confirm songs), plus alerts when the schedule is edited.
 Also creates a Google Calendar all-day event per service (leader invited)
 with 6pm popup notifications 7, 3, and 1 days before. Daily email check
-runs at 6pm. Read-only — never modifies the sheet.
+runs at 6pm. If a date 14 days out still has no leader, Nick/Penny/Yang
+get a vacancy alert. Read-only — never modifies the sheet.
 
 Note: calendar popup times are guaranteed on the organizer's
 (tcacf.ut@gmail.com) calendar; invited leaders see the event and get
