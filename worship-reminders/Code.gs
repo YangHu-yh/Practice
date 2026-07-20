@@ -10,15 +10,22 @@
 
 // ======================= CONFIG — edit this block =======================
 var CONFIG = {
-  SPREADSHEET_ID: '1Eg5AgpcZgO-XBwh33hD5VoJEtEB1C7Jw', // update after converting to native Google Sheet (ID changes!)
+  SPREADSHEET_ID: '16H-shnXxKaMlDAlORiVssMwhAXgIB7VeLbYEay_oDus',
   SHEET_NAME: '',            // '' = first sheet; or e.g. '2026'
   DATE_HEADER: 'Date',       // header text of the date column
   LEADER_HEADER: 'Leader',   // header text of the worship-leader column
 
-  // Name (exactly as written in the sheet) -> email
-  EMAILS: {
-    'Example Name': 'example@gmail.com'
-  },
+  // One entry per leader: their email + every way their name may be
+  // written in the sheet. Matching ignores case, spaces, and '#'.
+  LEADERS: [
+    { email: 'pennybigping@gmail.com', names: ['張惠平', '惠平', 'Penny'] },
+    { email: 'phchennick@gmail.com',   names: ['Nick Chen', 'Nick', '#NickChen'] },
+    { email: 'yang.hu496@gmail.com',   names: ['Yang', 'Yang Hu', '胡杨', 'Yang胡杨'] },
+    { email: 'emilybai@utexas.edu',    names: ['Emily', 'Emily Bai'] },
+    { email: 'ruian1106@gmail.com',    names: ['Ryan'] },
+    { email: 'james31423a@gmail.com',  names: ['鄭謹譯', '謹譯', 'Chin-Yi', 'James'] },
+    { email: 'CLSCROGGINS@gmail.com',  names: ['Clinton', 'Clinton-Scroggins', 'Clinton Scroggins'] }
+  ],
 
   COORDINATOR_EMAIL: 'tcacf.ut@gmail.com', // gets change alerts + unknown-name warnings
 
@@ -33,6 +40,22 @@ var CONFIG = {
   }
 };
 // ========================================================================
+
+/** Resolve a name from the sheet to an email; null if unknown. */
+function resolveEmail(name) {
+  var norm = normalizeName(name);
+  for (var i = 0; i < CONFIG.LEADERS.length; i++) {
+    var l = CONFIG.LEADERS[i];
+    for (var j = 0; j < l.names.length; j++) {
+      if (normalizeName(l.names[j]) === norm) return l.email;
+    }
+  }
+  return null;
+}
+
+function normalizeName(s) {
+  return String(s).toLowerCase().replace(/[\s#\-_,.]/g, '');
+}
 
 /** Run ONCE manually to install triggers. */
 function setup() {
@@ -50,11 +73,11 @@ function dailyCheck() {
     var diff = Math.round((startOfDay(row.date) - today) / 86400000);
     var r = CONFIG.REMINDERS[diff];
     if (!r) return;
-    var email = CONFIG.EMAILS[row.leader];
+    var email = resolveEmail(row.leader);
     var dateStr = Utilities.formatDate(row.date, Session.getScriptTimeZone(), 'EEE, MMM d, yyyy');
     if (!email) {
       MailApp.sendEmail(CONFIG.COORDINATOR_EMAIL, 'Worship reminder: no email for "' + row.leader + '"',
-        row.leader + ' leads on ' + dateStr + ' but is not in the EMAILS list.');
+        row.leader + ' leads on ' + dateStr + ' but matches no one in the LEADERS list.');
       return;
     }
     MailApp.sendEmail(email,
@@ -88,8 +111,9 @@ function detectChanges(schedule) {
   changes.forEach(function (c) {
     var msg = 'Schedule change for ' + c.date + ': ' + c.from + ' -> ' + c.to;
     var to = [CONFIG.COORDINATOR_EMAIL];
-    if (CONFIG.EMAILS[c.to]) to.push(CONFIG.EMAILS[c.to]);
-    if (CONFIG.EMAILS[c.from]) to.push(CONFIG.EMAILS[c.from]);
+    var toEmail = resolveEmail(c.to), fromEmail = resolveEmail(c.from);
+    if (toEmail) to.push(toEmail);
+    if (fromEmail) to.push(fromEmail);
     MailApp.sendEmail(to.join(','), 'Worship schedule changed (' + c.date + ')', msg);
   });
 
