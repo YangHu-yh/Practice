@@ -2,7 +2,7 @@
  * Worship schedule reminders.
  * Runs as tcacf.ut@gmail.com via Google Apps Script (script.google.com).
  * Reads the schedule sheet (never writes to it), emails reminders, syncs
- * Google Calendar events (with 6pm popup notifications), and detects
+ * Google Calendar events (with 3pm popup notifications), and detects
  * schedule changes.
  *
  * Setup: paste this into a new standalone Apps Script project, edit CONFIG,
@@ -15,6 +15,9 @@ var CONFIG = {
   SHEET_NAME: '2026',        // '' = first sheet; or e.g. '2026'
   DATE_HEADER: 'Date',       // header text of the date column
   LEADER_HEADER: 'Leader',   // header text of the worship-leader column
+  INSTRUMENT_HEADER: 'Instrument',    // optional column
+  VOCAL_HEADER: 'Second vocal',       // optional column
+  SONGS_HEADER: 'Songs',              // optional column
 
   // One entry per leader: their email + every way their name may be
   // written in the sheet. Matching ignores case, spaces, and '#'.
@@ -36,27 +39,42 @@ var CONFIG = {
     NOTIFY: ['phchennick@gmail.com', 'pennybigping@gmail.com', 'yang.hu496@gmail.com']
   },
 
-  DAILY_HOUR: 18, // hour (0-23) the daily email check runs — 18 = 6pm
+  DAILY_HOUR: 15, // hour (0-23) the daily email check runs — 15 = 3pm
 
   // Calendar sync: creates an all-day event per service on this account's
-  // default calendar, invites the leader, with 6pm popup notifications
+  // default calendar, invites the leader, with 3pm popup notifications
   // N days before (1 = the evening before, since all-day events start at
-  // midnight and a same-day 6pm popup isn't possible).
+  // midnight and a same-day 3pm popup isn't possible).
   CALENDAR: {
     ENABLED: true,
     EVENT_TITLE: '🎵 Worship Leading — {name}',
     POPUP_DAYS_BEFORE: [7, 3, 1],
-    NOTIFY_HOUR: 18 // 6pm
+    NOTIFY_HOUR: 15 // 3pm
   },
 
-  // Days-before -> message. 0 = day of service.
-  REMINDERS: {
-    7: { subject: 'Worship on {date} 🎶 — instrument & vocal check-in',
-         body: 'Hi {name},\n\nHope your week is going well! Just a friendly heads-up that you\'ll be leading worship on {date} — thank you so much for serving! 🙏\n\nWhen you get a chance this week, could you confirm your instrumentalist and second vocal helper?\n\nBlessings,\nTCACF Auto Reminder' },
-    3: { subject: 'Worship on {date} 🎶 — song list check-in',
-         body: 'Hi {name},\n\nJust a gentle reminder that worship on {date} is a few days away. Could you confirm the songs you\'re planning to use? That way everyone has time to practice together. 😊\n\nThank you for leading us!\n\nBlessings,\nTCACF Auto Reminder' },
-    0: { subject: 'Today\'s the day — worship on {date} 🎵',
-         body: 'Hi {name},\n\nToday\'s the day! You\'re leading worship today, {date}. We\'re so grateful for you — see you there! 🙌\n\nBlessings,\nTCACF Auto Reminder' }
+  // When reminders go out (days before the service)
+  DAYS: { TEAM: 6, SONGS: 3, DAY_OF: 0 },
+
+  // Placeholders: {name} {date} {instrument} {vocal}
+  MESSAGES: {
+    TEAM_BOTH_MISSING: {
+      subject: 'Worship on {date} 🎶 — instrument & second vocal check-in',
+      body: 'Hi {name},\n\nHope your week is going well! Just a friendly heads-up that you\'ll be leading worship on {date} — thank you so much for serving! 🙏\n\nIt looks like the instrumentalist and second vocal helper aren\'t on the schedule yet. When you get a chance, could you find and confirm them?\n\nBlessings,\nTCACF Auto Reminder' },
+    TEAM_INSTRUMENT_MISSING: {
+      subject: 'Worship on {date} 🎶 — still need an instrumentalist',
+      body: 'Hi {name},\n\nHope your week is going well! You\'ll be leading worship on {date} — thank you for serving! 🙏\n\nYour second vocal ({vocal}) is set, but it looks like the instrumentalist isn\'t on the schedule yet. Could you find and confirm someone when you get a chance?\n\nBlessings,\nTCACF Auto Reminder' },
+    TEAM_VOCAL_MISSING: {
+      subject: 'Worship on {date} 🎶 — still need a second vocal',
+      body: 'Hi {name},\n\nHope your week is going well! You\'ll be leading worship on {date} — thank you for serving! 🙏\n\nYour instrumentalist ({instrument}) is set, but it looks like the second vocal helper isn\'t on the schedule yet. Could you find and confirm someone when you get a chance?\n\nBlessings,\nTCACF Auto Reminder' },
+    TEAM_ALL_SET: {
+      subject: 'Worship on {date} 🎶 — quick availability check',
+      body: 'Hi {name},\n\nYou\'ll be leading worship on {date} — thank you for serving! 🙏\n\nYour team is on the schedule: instrumentalist {instrument} and second vocal {vocal}. Could you just double-check that they\'re both still available?\n\nBlessings,\nTCACF Auto Reminder' },
+    SONGS_MISSING: {
+      subject: 'Worship on {date} 🎶 — song list check-in',
+      body: 'Hi {name},\n\nJust a gentle reminder that worship on {date} is a few days away, and the song list isn\'t on the schedule yet. Could you confirm the songs you\'re planning to use? That way everyone has time to practice together. 😊\n\nThank you for leading us!\n\nBlessings,\nTCACF Auto Reminder' },
+    DAY_OF: {
+      subject: 'Today\'s the day — worship on {date} 🎵',
+      body: 'Hi {name},\n\nToday\'s the day! You\'re leading worship today, {date}. We\'re so grateful for you — see you there! 🙌\n\nBlessings,\nTCACF Auto Reminder' }
   }
 };
 // ========================================================================
@@ -85,6 +103,27 @@ function setup() {
   dailyCheck(); // also refreshes the snapshot + calendar now
 }
 
+/** Pick the right message for this row/day; null = nothing to send. */
+function pickMessage(row, diff) {
+  var M = CONFIG.MESSAGES;
+  if (diff === CONFIG.DAYS.TEAM) {
+    if (!row.instrument && !row.vocal) return M.TEAM_BOTH_MISSING;
+    if (!row.instrument) return M.TEAM_INSTRUMENT_MISSING;
+    if (!row.vocal) return M.TEAM_VOCAL_MISSING;
+    return M.TEAM_ALL_SET;
+  }
+  if (diff === CONFIG.DAYS.SONGS) return row.songs ? null : M.SONGS_MISSING;
+  if (diff === CONFIG.DAYS.DAY_OF) return M.DAY_OF;
+  return null;
+}
+
+function fillTemplate(text, row, dateStr) {
+  return text.replace(/\{name\}/g, row.leader)
+             .replace(/\{date\}/g, dateStr)
+             .replace(/\{instrument\}/g, row.instrument)
+             .replace(/\{vocal\}/g, row.vocal);
+}
+
 /** Daily: send due reminders, sync calendar, check for schedule changes. */
 function dailyCheck() {
   var schedule = readSchedule();
@@ -101,7 +140,7 @@ function dailyCheck() {
       }
       return;
     }
-    var r = CONFIG.REMINDERS[diff];
+    var r = pickMessage(row, diff);
     if (!r) return;
     var email = resolveEmail(row.leader);
     var dateStr = Utilities.formatDate(row.date, Session.getScriptTimeZone(), 'EEE, MMM d, yyyy');
@@ -110,9 +149,7 @@ function dailyCheck() {
         row.leader + ' leads on ' + dateStr + ' but matches no one in the LEADERS list.');
       return;
     }
-    MailApp.sendEmail(email,
-      r.subject.replace('{date}', dateStr),
-      r.body.replace(/\{name\}/g, row.leader).replace(/\{date\}/g, dateStr));
+    MailApp.sendEmail(email, fillTemplate(r.subject, row, dateStr), fillTemplate(r.body, row, dateStr));
   });
   detectChanges(schedule);
   syncCalendar(schedule);
@@ -195,30 +232,42 @@ function detectChanges(schedule) {
   props.setProperty('snapshot', JSON.stringify(now));
 }
 
-/** Read the sheet -> [{date: Date, leader: string}]. Read-only. */
+/**
+ * Read the sheet -> [{date, leader, instrument, vocal, songs}]. Read-only.
+ * Instrument/vocal/songs columns are optional; missing columns read as ''.
+ */
 function readSchedule() {
   var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var sheet = CONFIG.SHEET_NAME ? ss.getSheetByName(CONFIG.SHEET_NAME) : ss.getSheets()[0];
   var values = sheet.getDataRange().getValues();
 
-  var headerRow = -1, dateCol = -1, leaderCol = -1;
+  var headerRow = -1, dateCol = -1, leaderCol = -1, instCol = -1, vocalCol = -1, songsCol = -1;
   for (var i = 0; i < values.length && headerRow < 0; i++) {
     for (var j = 0; j < values[i].length; j++) {
       var cell = String(values[i][j]).trim().toLowerCase();
       if (cell === CONFIG.DATE_HEADER.toLowerCase()) dateCol = j;
       if (cell === CONFIG.LEADER_HEADER.toLowerCase()) leaderCol = j;
+      if (cell === CONFIG.INSTRUMENT_HEADER.toLowerCase()) instCol = j;
+      if (cell === CONFIG.VOCAL_HEADER.toLowerCase()) vocalCol = j;
+      if (cell === CONFIG.SONGS_HEADER.toLowerCase()) songsCol = j;
     }
     if (dateCol >= 0 && leaderCol >= 0) headerRow = i;
-    else { dateCol = -1; leaderCol = -1; }
+    else { dateCol = -1; leaderCol = -1; instCol = -1; vocalCol = -1; songsCol = -1; }
   }
   if (headerRow < 0) throw new Error('Could not find headers "' + CONFIG.DATE_HEADER + '" and "' + CONFIG.LEADER_HEADER + '"');
 
   var rows = [];
   for (var k = headerRow + 1; k < values.length; k++) {
-    var d = values[k][dateCol], leader = String(values[k][leaderCol]).trim();
+    var d = values[k][dateCol];
     if (!(d instanceof Date)) d = new Date(d);
     if (isNaN(d.getTime())) continue; // keep blank-leader rows for vacancy alerts
-    rows.push({ date: d, leader: leader });
+    rows.push({
+      date: d,
+      leader: String(values[k][leaderCol]).trim(),
+      instrument: instCol >= 0 ? String(values[k][instCol]).trim() : '',
+      vocal: vocalCol >= 0 ? String(values[k][vocalCol]).trim() : '',
+      songs: songsCol >= 0 ? String(values[k][songsCol]).trim() : ''
+    });
   }
   return rows;
 }
@@ -227,14 +276,15 @@ function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** Manual test: sends all three reminder templates to Yang only. */
+/** Manual test: sends every message variant to Yang only. */
 function testYang() {
   var email = 'yang.hu496@gmail.com';
   var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'EEE, MMM d, yyyy');
-  [7, 3, 0].forEach(function (d) {
-    var r = CONFIG.REMINDERS[d];
+  var fakeRow = { leader: 'Yang', instrument: 'Nick (guitar)', vocal: 'Emily', songs: '' };
+  Object.keys(CONFIG.MESSAGES).forEach(function (kind) {
+    var r = CONFIG.MESSAGES[kind];
     MailApp.sendEmail(email,
-      '[TEST] ' + r.subject.replace('{date}', dateStr),
-      r.body.replace(/\{name\}/g, 'Yang').replace(/\{date\}/g, dateStr));
+      '[TEST ' + kind + '] ' + fillTemplate(r.subject, fakeRow, dateStr),
+      fillTemplate(r.body, fakeRow, dateStr));
   });
 }

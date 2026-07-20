@@ -1,11 +1,11 @@
 # Worship Schedule Reminders
 
 Apps Script that emails worship leaders from the schedule spreadsheet:
-day-of reminder, 7-days-before (confirm instrument & second vocal),
-3-days-before (confirm songs), plus alerts when the schedule is edited.
+day-of reminder, 6-days-before (instrument & second vocal, only what is missing),
+3-days-before (songs, only if still blank), plus alerts when the schedule is edited.
 Also creates a Google Calendar all-day event per service (leader invited)
-with 6pm popup notifications 7, 3, and 1 days before. Daily email check
-runs at 6pm. If a date 14 days out still has no leader, Nick/Penny/Yang
+with 3pm popup notifications 7, 3, and 1 days before. Daily email check
+runs at 3pm. If a date 14 days out still has no leader, Nick/Penny/Yang
 get a vacancy alert. Read-only — never modifies the sheet.
 
 Note: calendar popup times are guaranteed on the organizer's
