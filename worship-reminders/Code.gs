@@ -95,6 +95,11 @@ function normalizeName(s) {
   return String(s).toLowerCase().replace(/[\s#\-_,.]/g, '');
 }
 
+/** Send mail with an HTML body so Gmail doesn't hard-wrap lines. */
+function sendMail(to, subject, body) {
+  MailApp.sendEmail(to, subject, body, { htmlBody: body.replace(/\n/g, '<br>') });
+}
+
 /** Run ONCE manually to install triggers. */
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
@@ -133,7 +138,7 @@ function dailyCheck() {
     if (!row.leader) { // no leader assigned yet
       if (diff === CONFIG.VACANCY.DAYS_BEFORE) {
         var vDateStr = Utilities.formatDate(row.date, Session.getScriptTimeZone(), 'EEE, MMM d, yyyy');
-        MailApp.sendEmail(CONFIG.VACANCY.NOTIFY.join(','),
+        sendMail(CONFIG.VACANCY.NOTIFY.join(','),
           'No worship leader yet for ' + vDateStr + ' 🙏',
           'Hi team,\n\nThere is no worship leader decided for ' + vDateStr +
           ' yet (2 weeks away). Could you try contacting or asking around to find someone?\n\nThank you!\nTCACF Auto Reminder');
@@ -145,11 +150,11 @@ function dailyCheck() {
     var email = resolveEmail(row.leader);
     var dateStr = Utilities.formatDate(row.date, Session.getScriptTimeZone(), 'EEE, MMM d, yyyy');
     if (!email) {
-      MailApp.sendEmail(CONFIG.COORDINATOR_EMAIL, 'Worship reminder: no email for "' + row.leader + '"',
+      sendMail(CONFIG.COORDINATOR_EMAIL, 'Worship reminder: no email for "' + row.leader + '"',
         row.leader + ' leads on ' + dateStr + ' but matches no one in the LEADERS list.');
       return;
     }
-    MailApp.sendEmail(email, fillTemplate(r.subject, row, dateStr), fillTemplate(r.body, row, dateStr));
+    sendMail(email, fillTemplate(r.subject, row, dateStr), fillTemplate(r.body, row, dateStr));
   });
   detectChanges(schedule);
   syncCalendar(schedule);
@@ -226,7 +231,7 @@ function detectChanges(schedule) {
     var toEmail = resolveEmail(c.to), fromEmail = resolveEmail(c.from);
     if (toEmail) to.push(toEmail);
     if (fromEmail) to.push(fromEmail);
-    MailApp.sendEmail(to.join(','), 'Worship schedule changed (' + c.date + ')', msg);
+    sendMail(to.join(','), 'Worship schedule changed (' + c.date + ')', msg);
   });
 
   props.setProperty('snapshot', JSON.stringify(now));
@@ -283,7 +288,7 @@ function testYang() {
   var fakeRow = { leader: 'Yang', instrument: 'Nick (guitar)', vocal: 'Emily', songs: '' };
   Object.keys(CONFIG.MESSAGES).forEach(function (kind) {
     var r = CONFIG.MESSAGES[kind];
-    MailApp.sendEmail(email,
+    sendMail(email,
       '[TEST ' + kind + '] ' + fillTemplate(r.subject, fakeRow, dateStr),
       fillTemplate(r.body, fakeRow, dateStr));
   });
