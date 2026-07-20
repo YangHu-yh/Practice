@@ -263,12 +263,13 @@ function readSchedule() {
 
   var rows = [];
   for (var k = headerRow + 1; k < values.length; k++) {
-    var d = values[k][dateCol];
-    if (!(d instanceof Date)) d = new Date(d);
-    if (isNaN(d.getTime())) continue; // keep blank-leader rows for vacancy alerts
+    var d = parseSheetDate(values[k][dateCol], sheet.getName());
+    if (!d) continue; // keep blank-leader rows for vacancy alerts
+    var leaderVal = String(values[k][leaderCol]).trim();
+    if (isNoService(leaderVal)) continue; // e.g. "N/A (Diaspora)"
     rows.push({
       date: d,
-      leader: String(values[k][leaderCol]).trim(),
+      leader: leaderVal,
       instrument: instCol >= 0 ? String(values[k][instCol]).trim() : '',
       vocal: vocalCol >= 0 ? String(values[k][vocalCol]).trim() : '',
       songs: songsCol >= 0 ? String(values[k][songsCol]).trim() : ''
@@ -279,6 +280,31 @@ function readSchedule() {
 
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * Parse sheet dates that may be real Dates or text like "Jul. 10th".
+ * Year comes from the text if present, else the tab name (e.g. "2026"),
+ * else the current year. Returns null if unparseable.
+ */
+function parseSheetDate(val, sheetName) {
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  var s = String(val).trim();
+  if (!s) return null;
+  var m = s.match(/([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/);
+  if (m) {
+    var year = m[3] ? Number(m[3]) :
+               (/^\d{4}$/.test(sheetName) ? Number(sheetName) : new Date().getFullYear());
+    var d = new Date(m[1].replace('.', '') + ' ' + m[2] + ', ' + year);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  var d2 = new Date(s);
+  return isNaN(d2.getTime()) ? null : d2;
+}
+
+/** Rows like "N/A (Diaspora)" mean no regular service — ignore them. */
+function isNoService(leader) {
+  return /^n\/?a\b/i.test(leader);
 }
 
 /** Manual test: sends every message variant to Yang only. */
