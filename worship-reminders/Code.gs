@@ -25,10 +25,12 @@ var CONFIG = {
     { email: 'pennybigping@gmail.com', names: ['張惠平', '惠平', 'Hui-ping', 'Penny'] },
     { email: 'phchennick@gmail.com',   names: ['Nick Chen', 'Nick', '#NickChen'] },
     { email: 'yang.hu496@gmail.com',   names: ['Yang', 'Yang Hu', '胡杨', 'Yang胡杨'] },
-    { email: 'emilybai@utexas.edu',    names: ['Emily', 'Emily Bai'] },
+    { email: 'emilybai@utexas.edu',    names: ['Emily', 'Emily Bai', 'E+E', 'E + E'] },
     { email: 'ruian1106@gmail.com',    names: ['Ryan', 'Ryan Chang'] },
     { email: 'james31423a@gmail.com',  names: ['鄭謹譯', '謹譯', 'Chin-Yi', 'James'] },
-    { email: 'CLSCROGGINS@gmail.com',  names: ['Clinton', 'Clinton-Scroggins', 'Clinton Scroggins'] }
+    { email: 'CLSCROGGINS@gmail.com',  names: ['Clinton', 'Clinton-Scroggins', 'Clinton Scroggins'] },
+    { email: 'mrwater1206@gmail.com',  names: ['David', 'Water', 'David Water', 'David Shui', '水哥', '水修澤', '水修泽'] },
+    { email: 'kristen0128chanmin@gmail.com', names: ['K', 'Kristen', '詹閔', 'Min'] }
   ],
 
   COORDINATOR_EMAIL: 'tcacf.ut@gmail.com', // gets change alerts + unknown-name warnings
@@ -208,6 +210,23 @@ function syncCalendar(schedule) {
   props.setProperty('calEvents', JSON.stringify(stored));
 }
 
+/** After adding new leaders' emails, use this function to invite the new leaders */
+function inviteMissingGuests() {
+  var cal = CalendarApp.getDefaultCalendar();
+  var stored = JSON.parse(PropertiesService.getScriptProperties().getProperty('calEvents') || '{}');
+  Object.keys(stored).sort().forEach(function (key) {
+    var email = resolveEmail(stored[key].leader);
+    if (!email) { Logger.log(key + ': still no email for "' + stored[key].leader + '"'); return; }
+    var ev = cal.getEventById(stored[key].id);
+    if (!ev) { Logger.log(key + ': event not found (deleted?)'); return; }
+    var already = ev.getGuestList().some(function (g) {
+      return g.getEmail().toLowerCase() === email.toLowerCase();
+    });
+    if (already) { Logger.log(key + ': ' + email + ' already invited'); }
+    else { ev.addGuest(email); Logger.log(key + ': invited ' + email); }
+  });
+}
+
 /** Diff current schedule vs stored snapshot; alert on changes to future dates. */
 function detectChanges(schedule) {
   var props = PropertiesService.getScriptProperties();
@@ -318,4 +337,29 @@ function testYang() {
       '[TEST ' + kind + '] ' + fillTemplate(r.subject, fakeRow, dateStr),
       fillTemplate(r.body, fakeRow, dateStr));
   });
+}
+
+/** One-time cleanup: delete calendar events created for N/A rows. */
+function cleanupNoService() {
+  var cal = CalendarApp.getDefaultCalendar();
+  var props = PropertiesService.getScriptProperties();
+  var stored = JSON.parse(props.getProperty('calEvents') || '{}');
+  Object.keys(stored).forEach(function (key) {
+    if (/^n\/?a\b/i.test(stored[key].leader)) {
+      try { var ev = cal.getEventById(stored[key].id); if (ev) ev.deleteEvent(); } catch (e) {}
+      delete stored[key];
+    }
+  });
+  props.setProperty('calEvents', JSON.stringify(stored));
+}
+
+/** Debug: log parsed schedule rows and the stored calendar-event map. */
+function debugCal() {
+  var rows = readSchedule();
+  Logger.log('total rows: ' + rows.length);
+  rows.forEach(function (r) {
+    Logger.log(Utilities.formatDate(r.date, Session.getScriptTimeZone(), 'yyyy-MM-dd') +
+      ' | leader="' + r.leader + '" | future=' + (startOfDay(r.date) >= startOfDay(new Date())));
+  });
+  Logger.log('calEvents: ' + PropertiesService.getScriptProperties().getProperty('calEvents'));
 }
