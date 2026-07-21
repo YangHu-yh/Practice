@@ -434,6 +434,30 @@ function auditCalendar(fix) {
   }
 }
 
+/** Dry-run: log what the next 15 daily checks would send. No emails sent. */
+function previewUpcoming() {
+  var schedule = readSchedule();
+  var tz = Session.getScriptTimeZone();
+  var today = startOfDay(new Date());
+  for (var offset = 0; offset < 15; offset++) {
+    var runDay = new Date(today.getTime() + offset * 86400000);
+    schedule.forEach(function (row) {
+      var diff = Math.round((startOfDay(row.date) - runDay) / 86400000);
+      var dateStr = Utilities.formatDate(row.date, tz, 'MMM d');
+      if (!row.leader) {
+        if (diff === CONFIG.VACANCY.DAYS_BEFORE)
+          Logger.log(Utilities.formatDate(runDay, tz, 'MMM d') + ' 3pm: VACANCY alert for ' + dateStr + ' -> Nick/Penny/Yang');
+        return;
+      }
+      var r = pickMessage(row, diff);
+      if (!r) return;
+      var email = resolveEmail(row.leader) || 'COORDINATOR (no email for ' + row.leader + ')';
+      Logger.log(Utilities.formatDate(runDay, tz, 'MMM d') + ' 3pm: "' +
+        fillTemplate(r.subject, row, dateStr) + '" -> ' + email);
+    });
+  }
+}
+
 /** Debug: log parsed schedule rows and the stored calendar-event map. */
 function debugCal() {
   var rows = readSchedule();
