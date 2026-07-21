@@ -353,6 +353,87 @@ function cleanupNoService() {
   props.setProperty('calEvents', JSON.stringify(stored));
 }
 
+/** Audit the REAL calendar against the schedule. Read-only report. */
+function auditOnly() { auditCalendar(false); }
+/** Audit and fix: delete orphans/dupes, create missing events, add missing guests, rebuild state. */
+function auditAndFix() { auditCalendar(true); }
+
+function auditCalendar(fix) {
+  var tz = Session.getScriptTimeZone();
+  var today = startOfDay(new Date());
+  var horizon = new Date(today.getTime() + 366 * 86400000);
+  var cal = CalendarApp.getDefaultCalendar();
+  var titlePrefix = CONFIG.CALENDAR.EVENT_TITLE.split('{name}')[0].replace(/\s+$/, '');
+
+  // What the schedule says should exist (future dates with a leader)
+  var expected = {};
+  readSchedule().forEach(function (row) {
+    if (startOfDay(row.date) >= today && row.leader) {
+      expected[Utilities.formatDate(row.date, tz, 'yyyy-MM-dd')] = row.leader;
+    }
+  });
+
+  // What actually exists on the calendar (script-created events only)
+  var actual = {};
+  cal.getEvents(today, horizon).forEach(function (ev) {
+    if (ev.getTitle().indexOf(titlePrefix) !== 0) return;
+    var d = ev.isAllDayEvent() ? ev.getAllDayStartDate() : ev.getStartTime();
+    var key = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    (actual[key] = actual[key] || []).push(ev);
+  });
+
+  var stored = {};
+  var keys = Object.keys(expected);
+  Object.keys(actual).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
+  keys.sort().forEach(function (key) {
+    var leader = expected[key];
+    var evs = actual[key] || [];
+
+    if (!leader) {
+      Logger.log(key + ': ORPHAN "' + evs[0].getTitle() + '" — not in schedule' + (fix ? ' -> deleting' : ''));
+      if (fix) evs.forEach(function (e) { e.deleteEvent(); });
+      return;
+    }
+    if (evs.length === 0) {
+      Logger.log(key + ': MISSING event for "' + leader + '"' + (fix ? ' -> creating' : ''));
+      if (fix) {
+        var email0 = resolveEmail(leader);
+        var parts = key.split('-');
+        var ev0 = cal.createAllDayEvent(
+          CONFIG.CALENDAR.EVENT_TITLE.replace('{name}', leader),
+          new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])),
+          { description: leader + ' is leading worship. 🎶\n(Created by TCACF Auto Reminder)',
+            guests: email0 || '', sendInvites: !!email0 });
+        ev0.removeAllReminders();
+        CONFIG.CALENDAR.POPUP_DAYS_BEFORE.forEach(function (d) {
+          ev0.addPopupReminder(d * 1440 - CONFIG.CALENDAR.NOTIFY_HOUR * 60);
+        });
+        stored[key] = { id: ev0.getId(), leader: leader };
+      }
+      return;
+    }
+    if (evs.length > 1) {
+      Logger.log(key + ': ' + evs.length + ' DUPLICATE events' + (fix ? ' -> keeping first, deleting rest' : ''));
+      if (fix) evs.slice(1).forEach(function (e) { e.deleteEvent(); });
+    }
+    var ev = evs[0];
+    var email = resolveEmail(leader);
+    var guests = ev.getGuestList().map(function (g) { return g.getEmail(); });
+    var hasGuest = email && guests.some(function (g) { return g.toLowerCase() === email.toLowerCase(); });
+    var status = key + ': event "' + ev.getTitle() + '" | guests=[' + guests.join(', ') + ']';
+    if (!email) status += ' | NO EMAIL known for "' + leader + '"';
+    else if (hasGuest) status += ' | guest OK';
+    else { status += ' | MISSING guest ' + email + (fix ? ' -> inviting' : ''); if (fix) ev.addGuest(email); }
+    Logger.log(status);
+    stored[key] = { id: ev.getId(), leader: leader };
+  });
+
+  if (fix) {
+    PropertiesService.getScriptProperties().setProperty('calEvents', JSON.stringify(stored));
+    Logger.log('calEvents state rebuilt from actual calendar.');
+  }
+}
+
 /** Debug: log parsed schedule rows and the stored calendar-event map. */
 function debugCal() {
   var rows = readSchedule();
